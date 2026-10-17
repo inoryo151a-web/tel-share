@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2563eb">
+<title>受電を記録</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--text:#1f2328;--sub:#6b7280;--line:#e5e7eb;--pri:#2563eb;--ok:#16a34a;--ng:#dc2626}
+@media (prefers-color-scheme: dark){:root{--bg:#111418;--card:#1c2128;--text:#e6e8eb;--sub:#9aa4b2;--line:#2d333b;--pri:#3b82f6;--ok:#4ade80;--ng:#f87171}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);overscroll-behavior:none;
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:560px;margin:0 auto;padding:24px 16px}
+h1{font-size:20px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--sub);margin-bottom:6px}
+input{width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;padding:10px 14px;font-size:15px;margin-top:10px;cursor:pointer}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:700}
+p{line-height:1.6}
+.sub{color:var(--sub);font-size:14px}
+#msg.ok{color:var(--ok)} #msg.ng{color:var(--ng)}
+</style>
+</head>
+<body>
+<main>
+  <h1>受電を記録</h1>
+  <div id="go" class="card" hidden><p>受電タブを開いています…</p></div>
+  <div id="setup" hidden>
+    <div class="card">
+      <p>着信履歴やLINEで「共有」→「受電記録」を選ぶと、今日やるアプリに送られます。</p>
+      <p class="sub">・電話番号だけ → 受電タブの電話番号欄へ<br>・それ以外の文章 → 今日タブのメモ欄へ（確認して「追加」で保存）</p>
+    </div>
+    <div class="card">
+      <p id="dest" class="sub"></p>
+      <button class="btn" id="test">試しに開く</button>
+      <p id="msg"></p>
+    </div>
+  </div>
+</main>
+<script>
+/* 画面の端からのスワイプで「戻る」が起きないようにする（全アプリ共通ルール） */
+document.addEventListener('touchstart', e => {
+  const x = e.touches[0].clientX;
+  if (x < 20 || x > window.innerWidth - 20) e.preventDefault();
+}, { passive: false });
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/* ===== 転送先（今日やるアプリのURL）をここに固定します =====
+   ''の中に、今日やるアプリのURL（https://script.google.com/macros/s/…/exec）を貼ってください。
+   画面からは変更できません。変える時はこの1行を書き換えてアップロードし直します。 */
+const APP_URL = '';
+
+const MEMO_MAX = 1000; // メモとして送る文章の上限（文字）
+const $ = s => document.querySelector(s);
+
+// 共有された文字から電話番号を取り出す（+81 は 0 に直す）
+function pickTel(s) {
+  const m = String(s || '').match(/\+?\d[\d\-\s()]{8,}\d/);
+  if (!m) return '';
+  let t = m[0].replace(/[\s()]/g, '');
+  if (t.indexOf('+81') === 0) t = '0' + t.slice(3).replace(/^-/, '');
+  return t;
+}
+// 転送先は「GASのウェブアプリのURL」の形のものだけ
+const valid = v => /^https:\/\/script\.google\.com\/(a\/macros\/[A-Za-z0-9.\-]+|macros)\/s\/[A-Za-z0-9_\-]+\/exec$/.test(v);
+
+// 共有された内容が「電話番号だけ」か（着信履歴からの共有）
+const isTelOnly = s => /^\s*(tel:)?\s*\+?[\d\-\s()]{10,20}\s*$/i.test(s);
+
+// 内容はURLの「#」以降に付けて渡す（#以降はサーバーに送られず、スマホの中だけで受け渡される）
+// kind: tel（受電タブへ） / memo（メモ欄へ）
+function openApp(kind, value) {
+  if (!valid(APP_URL)) return false;
+  if (kind === 'tel' && !/^\+?[\d\-]{10,15}$/.test(value)) return false;
+  if (kind === 'memo' && !value) return false;
+  location.replace(APP_URL + '#' + kind + '=' + encodeURIComponent(value));
+  return true;
+}
+function showSetup(msg) {
+  $('#go').hidden = true;
+  $('#setup').hidden = false;
+  $('#dest').textContent = valid(APP_URL)
+    ? '転送先：今日やるアプリ（…' + APP_URL.slice(-12) + '）に固定されています'
+    : '転送先のURLがコードに設定されていません（index.html の APP_URL を設定してください）';
+  if (msg) { $('#msg').className = 'ng'; $('#msg').textContent = msg; }
+}
+
+const q = new URLSearchParams(location.search);
+const shared = ['title', 'text', 'url'].map(k => q.get(k) || '').join('\n').trim();
+// 共有された内容をアドレス欄・履歴から消す
+if (location.search) history.replaceState(null, '', location.pathname);
+
+if (shared) {
+  let ok = false;
+  if (!valid(APP_URL)) {
+    showSetup('転送先のURLが設定されていないため、送信しませんでした。');
+  } else {
+    $('#go').hidden = false;
+    if (isTelOnly(shared)) ok = openApp('tel', pickTel(shared));
+    else ok = openApp('memo', shared.slice(0, MEMO_MAX));
+    if (!ok) showSetup('共有された内容を読み取れなかったため、送信しませんでした。');
+  }
+} else {
+  showSetup('');
+}
+$('#test').onclick = () => {
+  if (!openApp('tel', '090-0000-0000')) {
+    $('#msg').className = 'ng';
+    $('#msg').textContent = '転送先のURLがコードに設定されていません';
+  }
+};
+</script>
+</body>
+</html>
