@@ -53,8 +53,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 /* ===== 転送先（今日やるアプリのURL）をここに固定します =====
    ''の中に、今日やるアプリのURL（https://script.google.com/macros/s/…/exec）を貼ってください。
    画面からは変更できません。変える時はこの1行を書き換えてアップロードし直します。 */
-const APP_URL = '';
-
+const APP_URL = 'https://script.google.com/macros/s/AKfycbwKuNjflZu3WtbiBAcYJyUSMdZ4LFdr7FlsYzWmywmEhyDLJgpDgOP1qsd3Vtj-SAFWqQ/exec';
 const MEMO_MAX = 1000; // メモとして送る文章の上限（文字）
 const $ = s => document.querySelector(s);
 
