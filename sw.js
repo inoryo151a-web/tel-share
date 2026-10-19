@@ -1,6 +1,6 @@
 // 受け取りページをスマホの中に保存しておき、共有された番号がGitHubに送られないようにする仕組み
 // ※ index.html などを更新した時は、下の名前の v1 を v2 に変えてください（古い保存分が入れ替わります）
-const CACHE = 'tel-share-v2';
+const CACHE = 'tel-share-v3';
 const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
