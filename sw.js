@@ -1,6 +1,7 @@
-// 受け取りページをスマホの中に保存しておき、共有された番号がGitHubに送られないようにする仕組み
-// ※ index.html などを更新した時は、下の名前の v1 を v2 に変えてください（古い保存分が入れ替わります）
-const CACHE = 'tel-share-v3';
+// 受け取りページの最新版を取りに行きつつ、共有された番号がGitHubに送られないようにする仕組み
+// ・ページを開く時は、番号などが付いていない素のアドレスで最新版を取りに行く（番号はGitHubに送られない）
+// ・電波が無い時だけ、スマホに保存しておいた分を使う
+const CACHE = 'tel-share-v4';
 const FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -18,10 +19,15 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.mode === 'navigate') {
-    // ページを開く通信（共有された番号がURLに付いている）は、スマホ内の保存分で返す。
-    // 保存分が無い時も、番号を外したURLで取りに行く。
+    const bare = new URL('./', self.registration.scope).href; // 「?」以降（共有された内容）を外したアドレス
     e.respondWith(
-      caches.match('./index.html').then(r => r || fetch(new URL('./', self.registration.scope).href))
+      fetch(bare, { cache: 'no-store' })
+        .then(res => {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put('./index.html', copy));
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
     );
     return;
   }
